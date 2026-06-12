@@ -1,0 +1,225 @@
+{
+  "app": {
+    "name": "AItube",
+    "tagline": "Verified, high-craft AI video."
+  },
+  "nav": {
+    "home": "Home",
+    "upload": "Upload",
+    "studio": "Studio",
+    "monetization": "Monetization",
+    "analytics": "Analytics",
+    "collaborations": "Collaborations",
+    "help": "Help bot",
+    "signIn": "Sign in",
+    "signOut": "Sign out"
+  },
+  "home": {
+    "heroTitle": "Verified, high-craft AI video",
+    "heroSubtitle": "Where creators are paid fairly and viewers always know what they're watching.",
+    "emptyTitle": "No videos yet",
+    "emptyBody": "Run the seed script to populate demo content: npm run db:seed",
+    "section": {
+      "featured": "Featured",
+      "highlyRated": "Highly Rated"
+    }
+  },
+  "video": {
+    "by": "by",
+    "ratings": "ratings",
+    "noRatings": "Not yet rated",
+    "qualityScore": "Quality Score"
+  },
+  "badge": {
+    "aiVerified": "AI-Verified",
+    "aiVerifiedTitle": "Provenance verified",
+    "model": "Model"
+  },
+  "signin": {
+    "title": "Sign in as a creator",
+    "subtitle": "Dev sign-in: pick a seeded creator to act as. No password — swappable for real OAuth later.",
+    "submit": "Sign in"
+  },
+  "upload": {
+    "title": "Upload a video",
+    "subtitle": "Every upload runs the verified safety pipeline before it can be published.",
+    "dropzone": "Drag a video here, or click to choose",
+    "dropzoneHint": "MP4 / MOV — nothing is actually uploaded in this build",
+    "fields": {
+      "title": "Title",
+      "titlePlaceholder": "Give your video a title",
+      "genre": "Genre",
+      "description": "Description",
+      "descriptionPlaceholder": "Optional"
+    },
+    "simulate": {
+      "label": "Simulate pipeline outcome (dev)",
+      "hint": "Forces the mock safety services so you can see each decision branch.",
+      "clean": "Clean → publish",
+      "review": "Ambiguous → review",
+      "explicit": "Explicit → block",
+      "violence": "Violence → block",
+      "deepfake": "Real-person deepfake → hard block",
+      "notAi": "Not AI → review"
+    },
+    "submit": "Start verified upload",
+    "uploading": "Storing & transcoding…",
+    "viewVideo": "View video",
+    "uploadAnother": "Upload another"
+  },
+  "pipeline": {
+    "running": "Running the safety pipeline…",
+    "step": {
+      "aiCheck": "AI-or-not check",
+      "provenance": "Provenance / Content Credentials",
+      "moderation": "Safety moderation",
+      "deepfake": "Real-person deepfake check"
+    }
+  },
+  "status": {
+    "processing": "Processing",
+    "inReview": "In review",
+    "published": "Published",
+    "blocked": "Blocked"
+  },
+  "policy": {
+    "message": {
+      "published": "Verified and published. Your AI-Verified badge is now live.",
+      "notAi": "We couldn't confirm this is AI-generated, so it's been sent for human review.",
+      "ambiguous": "This needs a quick human review before it can be published.",
+      "explicit": "Blocked: explicit content isn't allowed on AItube.",
+      "violence": "Blocked: graphic violence isn't allowed on AItube.",
+      "realPersonDeepfake": "Hard-blocked: this appears to depict a real, identifiable person without consent. Non-consensual likeness is not permitted and is not auto-appealable.",
+      "other": "Blocked by the safety pipeline.",
+      "error": "The pipeline hit an unexpected error and held this video. Please try again."
+    }
+  },
+  "studio": {
+    "title": "Your studio",
+    "empty": "No uploads yet. Start your first verified upload.",
+    "view": "View",
+    "askWhy": "Ask why"
+  },
+  "help": {
+    "title": "Creator help bot",
+    "subtitle": "Ask about uploads, our content policy, or why a specific video was flagged.",
+    "greeting": "Hi! I can explain uploads, our content policy, and why any of your videos was flagged or blocked. What do you need?",
+    "focusVideo": "About a specific video (optional)",
+    "noFocus": "— none —",
+    "placeholder": "Ask a question…",
+    "send": "Send",
+    "thinking": "Thinking…",
+    "error": "Sorry, I couldn't answer that right now.",
+    "q1": "How do I upload?",
+    "q2": "Why was my video flagged?",
+    "q3": "What's the content policy?",
+    "statusProcessing": "This video is still going through the safety pipeline.",
+    "policySummary": "AItube only hosts AI-generated video, and every upload must clear a pre-publish safety pipeline: we confirm it's AI, read its provenance (C2PA), and scan for explicit content, graphic violence, and non-consensual real-person likeness. Clean videos publish with an AI-Verified badge; ambiguous ones go to human review; explicit/violent content and real-person deepfakes are blocked."
+  },
+  "provenance": {
+    "title": "AI content disclosure",
+    "model": "Detected model",
+    "generator": "Generator (C2PA)",
+    "credentials": "Content Credentials",
+    "credentialsYes": "Present",
+    "credentialsNo": "Not present",
+    "disclosureBody": "This video is AI-generated. Provenance is read from C2PA Content Credentials where available (EU AI Act Art. 50 disclosure)."
+  },
+  "quality": {
+    "title": "Weighted Quality Score",
+    "outOf": "/ 5"
+  },
+  "rate": {
+    "title": "Rate this video",
+    "visual": "Visual Consistency",
+    "narrative": "Narrative / Script",
+    "audio": "Audio / Voice",
+    "save": "Submit rating",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "error": "Couldn't save",
+    "signInPrompt": "Sign in to rate this video —"
+  },
+  "monetize": {
+    "title": "Monetization",
+    "viewPublic": "View public page →",
+    "youKeep": "You keep",
+    "youKeepBlurb": "AItube's platform fee is a fraction of YouTube's 30–45%. You keep the rest.",
+    "qualification": "Qualification",
+    "qualified": "Qualified",
+    "notQualified": "Not yet qualified",
+    "reqVideos": "Published videos",
+    "reqQuality": "Best Weighted Quality Score",
+    "priceTitle": "Subscription price",
+    "priceLabel": "Monthly subscription price",
+    "savePrice": "Save price",
+    "priceSaved": "Price saved.",
+    "priceMin": "Minimum price is $1.00.",
+    "lockedHint": "Reach the qualification bar above to set a subscription price.",
+    "earnings": "Earnings",
+    "net": "Your net",
+    "gross": "Gross",
+    "fee": "Platform fee",
+    "subscribers": "Active subscribers",
+    "subs": "Subscriptions",
+    "tips": "Tips",
+    "support": "Support this creator",
+    "subscribe": "Subscribe",
+    "subscribed": "Subscribed — thank you!",
+    "tip": "Tip",
+    "tipped": "Tip sent — thank you!",
+    "tipMin": "Minimum tip is $1.00.",
+    "notMonetizedYet": "This creator isn't monetized yet, but you can tip them.",
+    "selfHint": "This is your own creator page.",
+    "signInPrompt": "Sign in to subscribe or tip —",
+    "error": "Something went wrong."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "views": "Views",
+    "watchTime": "Watch time",
+    "completes": "Completions",
+    "completion": "Completion",
+    "revenue": "Revenue (net)",
+    "geography": "Top countries",
+    "perVideo": "Per-video",
+    "dropOff": "Drop-off curve",
+    "ratingBreakdown": "Rating breakdown",
+    "empty": "No published videos yet — analytics will appear once you publish."
+  },
+  "collab": {
+    "title": "Collaborations",
+    "newPlaceholder": "New collaboration title",
+    "create": "Create",
+    "empty": "No collaborations yet. Start one and invite a co-creator.",
+    "members": "members",
+    "owner": "Owner",
+    "invited": "Invited",
+    "onVideo": "On video",
+    "invitePending": "You've been invited to co-create.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "credits": "Credits",
+    "invite": "Invite a co-creator",
+    "handlePlaceholder": "creator handle (e.g. inkmotion)",
+    "sendInvite": "Send invite",
+    "shares": "Revenue split",
+    "total": "Total",
+    "saveShares": "Save split",
+    "distribute": "Distribute earnings (demo)",
+    "distributeBtn": "Distribute",
+    "distributeHint": "Splits the amount across accepted co-creators by their share and writes co-creator ledger rows.",
+    "notes": "Shared project space",
+    "notePlaceholder": "Add a shared note or draft link…",
+    "addNote": "Add",
+    "noNotes": "No notes yet.",
+    "status": {
+      "invited": "Invited",
+      "accepted": "Accepted",
+      "declined": "Declined"
+    }
+  },
+  "footer": {
+    "builtWith": "AItube beta — mocks only, no external accounts required."
+  }
+}

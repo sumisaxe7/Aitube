@@ -1,0 +1,223 @@
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import { Genre } from "@prisma/client";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { UploadDropzone } from "@/components/upload-dropzone";
+import {
+  PipelineStatus,
+  type UploadStatusResponse,
+} from "@/components/pipeline-status";
+import { DEFAULT_LOCALE, getTranslator } from "@/lib/i18n";
+
+type Phase = "form" | "uploading" | "processing" | "done";
+const SIMULATE = [
+  "clean",
+  "review",
+  "explicit",
+  "violence",
+  "deepfake",
+  "not_ai",
+] as const;
+
+const inputCls =
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm font-medium">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+export function UploadClient({ creatorName }: { creatorName: string }) {
+  const t = getTranslator(DEFAULT_LOCALE);
+  const [phase, setPhase] = useState<Phase>("form");
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [genre, setGenre] = useState<string>(Genre.SCIFI);
+  const [description, setDescription] = useState("");
+  const [simulate, setSimulate] = useState<string>("clean");
+  const [progress, setProgress] = useState(0);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [status, setStatus] = useState<UploadStatusResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (phase !== "processing" || !videoId) return;
+    let active = true;
+    const tick = async () => {
+      const res = await fetch(`/api/uploads/${videoId}`);
+      if (!res.ok || !active) return;
+      const data = (await res.json()) as UploadStatusResponse;
+      if (!active) return;
+      setStatus(data);
+      if (data.processing?.step === "DONE") setPhase("done");
+    };
+    void tick();
+    const iv = setInterval(tick, 900);
+    return () => {
+      active = false;
+      clearInterval(iv);
+    };
+  }, [phase, videoId]);
+
+  const canSubmit = Boolean(file && title.trim()) && phase === "form";
+
+  async function submit() {
+    if (!canSubmit || !file) return;
+    setError(null);
+    setPhase("uploading");
+    setProgress(0);
+
+    // Read the video duration from the browser before uploading.
+    const durationSec = await new Promise<number>((resolve) => {
+      const el = document.createElement("video");
+      el.preload = "metadata";
+      el.onloadedmetadata = () => {
+        URL.revokeObjectURL(el.src);
+        resolve(isFinite(el.duration) ? Math.round(el.duration) : 0);
+      };
+      el.onerror = () => resolve(0);
+      el.src = URL.createObjectURL(file);
+    });
+
+    // Use XHR so we can track upload progress on the progress bar.
+    const fd = new FormData();
+    fd.append("title", title.trim());
+    if (description) fd.append("description", description);
+    fd.append("genre", genre);
+    fd.append("simulate", simulate);
+    fd.append("durationSec", String(durationSec));
+    fd.append("file", file);
+
+    try {
+      const res = await new Promise<Response>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/uploads");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setProgress((e.loaded / e.total) * 100);
+        };
+        xhr.onload = () =>
+          resolve(new Response(xhr.responseText, { status: xhr.status }));
+        xhr.onerror = () => reject(new Error("network error"));
+        xhr.send(fd);
+      });
+      if (!res.ok) {
+        const e = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(e.error ?? "upload failed");
+      }
+      const data = (await res.json()) as { videoId: string };
+      setTimeout(() => {
+        setVideoId(data.videoId);
+        setPhase("processing");
+      }, 600);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "error");
+      setPhase("form");
+    }
+  }
+
+  function reset() {
+    setPhase("form");
+    setFile(null);
+    setTitle("");
+    setDescription("");
+    setSimulate("clean");
+    setProgress(0);
+    setVideoId(null);
+    setStatus(null);
+    setError(null);
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{t("upload.title")}</h1>
+        <p className="text-sm text-muted-foreground">
+          {t("upload.subtitle")} · {creatorName}
+        </p>
+      </div>
+
+      {phase === "form" && (
+        <Card>
+          <CardContent className="space-y-4 p-6">
+            <UploadDropzone file={file} onFile={setFile} t={t} />
+            <Field label={t("upload.fields.title")}>
+              <input
+                className={inputCls}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t("upload.fields.titlePlaceholder")}
+              />
+            </Field>
+            <Field label={t("upload.fields.genre")}>
+              <select
+                className={inputCls}
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+              >
+                {Object.values(Genre).map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("upload.fields.description")}>
+              <textarea
+                className={inputCls}
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t("upload.fields.descriptionPlaceholder")}
+              />
+            </Field>
+            <Field label={t("upload.simulate.label")}>
+              <select
+                className={inputCls}
+                value={simulate}
+                onChange={(e) => setSimulate(e.target.value)}
+              >
+                {SIMULATE.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`upload.simulate.${s === "not_ai" ? "notAi" : s}`)}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {t("upload.simulate.hint")}
+              </span>
+            </Field>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button onClick={submit} disabled={!canSubmit}>
+              {t("upload.submit")}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {phase === "uploading" && (
+        <Card>
+          <CardContent className="space-y-3 p-6">
+            <p className="text-sm font-medium">{t("upload.uploading")}</p>
+            <div className="h-2 w-full overflow-hidden rounded bg-muted">
+              <div
+                className="h-full bg-primary transition-[width]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {(phase === "processing" || phase === "done") && (
+        <PipelineStatus status={status} onReset={reset} t={t} />
+      )}
+    </div>
+  );
+}

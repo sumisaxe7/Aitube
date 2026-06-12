@@ -1,0 +1,396 @@
+// AItube — Phase 0 schema.
+// Postgres is the single source of truth (CLAUDE.md). Models here are intentionally
+// minimal but carry the fields later phases need (status/aiModel/provenance for the
+// Phase 1 safety pipeline + badge; ratings for Phase 2's Weighted Quality Score) so
+// those phases drop in without churning this schema.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (NextAuth v5) models — standard adapter shape.
+// ---------------------------------------------------------------------------
+
+enum Role {
+  VIEWER
+  CREATOR
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(VIEWER)
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+
+  creatorProfile CreatorProfile?
+  ratings        Rating[]
+  subscriptions  Subscription[]  @relation("UserSubscriptions")
+  ledgerPayments LedgerEntry[]   @relation("UserLedger")
+
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Domain models
+// ---------------------------------------------------------------------------
+
+model CreatorProfile {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  handle                 String   @unique
+  displayName            String
+  bio                    String?
+  avatarUrl              String?
+  subscriptionPriceCents Int? // creator-set monthly price; null until they set one
+  createdAt              DateTime @default(now())
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos        Video[]
+  subscriptions Subscription[]
+  ledgerEntries LedgerEntry[]
+
+  ownedCollaborations Collaboration[] @relation("CollabOwner")
+  collaborations      Collaborator[]  @relation("CollabMember")
+  authoredNotes       ProjectNote[]   @relation("NoteAuthor")
+}
+
+enum Genre {
+  SCIFI
+  ANIME
+  DOCUMENTARY
+  MUSIC
+  COMEDY
+  FANTASY
+  EDUCATION
+  ANIMATION
+}
+
+// Lifecycle of an upload. PUBLISHED is the only viewer-visible state.
+// The Phase 1 safety pipeline writes PROCESSING -> IN_REVIEW / BLOCKED / PUBLISHED.
+enum VideoStatus {
+  PROCESSING
+  IN_REVIEW
+  PUBLISHED
+  BLOCKED
+}
+
+model Video {
+  id                 String      @id @default(cuid())
+  creatorId          String
+  title              String
+  description        String?
+  genre              Genre
+  status             VideoStatus @default(PUBLISHED)
+  posterUrl          String?
+  videoUrl           String? // local path served from /uploads/videos/; null for seeded/mock rows
+  durationSec        Int         @default(0)
+  // Provenance / "AI-Verified" badge inputs (surfaced in Phase 1).
+  aiModel            String?
+  provenanceVerified Boolean     @default(false)
+  publishedAt        DateTime?
+  createdAt          DateTime    @default(now())
+
+  creator        CreatorProfile    @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  ratings        Rating[]
+  processing     ProcessingStatus?
+  events         ViewerEvent[]
+  rollups        DailyRollup[]
+  collaborations Collaboration[]
+
+  @@index([status])
+  @@index([genre])
+  @@index([creatorId])
+}
+
+// One rating per user per video, editable (Phase 2 builds the UI + scoring;
+// the columns live here now so seed data can populate the home feed ranking).
+model Rating {
+  id        String   @id @default(cuid())
+  videoId   String
+  userId    String
+  visual    Int // Visual Consistency, 1-5
+  narrative Int // Narrative / Script, 1-5
+  audio     Int // Audio / Voice, 1-5
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, userId])
+  @@index([videoId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 — safety pipeline
+// ---------------------------------------------------------------------------
+
+// Live progress of the gating pipeline (polled by the creator's upload UI).
+enum PipelineStep {
+  QUEUED
+  AI_CHECK
+  PROVENANCE
+  MODERATION
+  DEEPFAKE
+  DONE
+}
+
+// Terminal decision of the pipeline. Maps to VideoStatus on completion.
+enum PipelineDecision {
+  PUBLISH
+  HOLD_FOR_REVIEW
+  BLOCK
+}
+
+// Why the pipeline did not publish (also covers review reasons). Drives the
+// creator-facing message and the Phase 6 "why was I flagged" answer.
+enum BlockReason {
+  NONE
+  NOT_AI
+  AMBIGUOUS
+  EXPLICIT
+  VIOLENCE
+  REAL_PERSON_DEEPFAKE
+  OTHER
+}
+
+// One row per upload: live step state + a snapshot of each service's output.
+model ProcessingStatus {
+  id         String            @id @default(cuid())
+  videoId    String            @unique
+  video      Video             @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  step       PipelineStep      @default(QUEUED)
+  decision   PipelineDecision?
+  reason     BlockReason       @default(NONE)
+  messageKey String?
+
+  // Step snapshots — power the AI-Verified badge, the watch-page disclosure,
+  // and the Phase 6 help bot's flag explanations.
+  aiIsGenerated            Boolean?
+  aiConfidence             Float?
+  aiModel                  String?
+  provenanceHasCredentials Boolean?
+  provenanceGenerator      String?
+  moderationDecision       String?
+  moderationTopCategory    String?
+  realPersonDeepfake       Boolean?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — monetization (subscriptions, tips, immutable ledger)
+// ---------------------------------------------------------------------------
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  creatorId        String
+  subscriberUserId String
+  priceCents       Int
+  status           SubscriptionStatus @default(ACTIVE)
+  createdAt        DateTime           @default(now())
+  canceledAt       DateTime?
+
+  creator    CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  subscriber User           @relation("UserSubscriptions", fields: [subscriberUserId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, subscriberUserId])
+  @@index([creatorId])
+}
+
+enum LedgerEntryType {
+  SUBSCRIPTION
+  TIP
+  COCREATOR_SHARE
+}
+
+// IMMUTABLE: rows are append-only. Amounts are NEVER mutated (CLAUDE.md). There is
+// deliberately no updatedAt and no update path — corrections are new rows.
+model LedgerEntry {
+  id               String          @id @default(cuid())
+  createdAt        DateTime        @default(now())
+  type             LedgerEntryType
+  creatorId        String // recipient creator
+  payerUserId      String? // payer (null for internal co-creator splits)
+  grossCents       Int
+  platformFeeCents Int
+  netCents         Int
+  currency         String          @default("USD")
+  splitGroupId     String? // links co-creator split rows to their source (Phase 5)
+  sourceEntryId    String?
+  note             String?
+
+  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  payer   User?          @relation("UserLedger", fields: [payerUserId], references: [id], onDelete: SetNull)
+
+  @@index([creatorId])
+  @@index([splitGroupId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — analytics (raw events + precomputed daily rollups)
+// ---------------------------------------------------------------------------
+
+enum EventType {
+  VIEW_START
+  WATCH_PROGRESS
+  COMPLETE
+  RATING
+  SUBSCRIBE
+  TIP
+}
+
+model ViewerEvent {
+  id          String    @id @default(cuid())
+  videoId     String
+  type        EventType
+  country     String? // ISO-2
+  positionSec Int? // furthest playback position for WATCH_PROGRESS
+  valueCents  Int? // amount for TIP
+  createdAt   DateTime  @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Precomputed per (video, day) aggregate for fast dashboards. Rebuilt from
+// ViewerEvent by the tested rollupDailyEvents() function.
+model DailyRollup {
+  id           String   @id @default(cuid())
+  videoId      String
+  date         DateTime // UTC midnight of the day
+  views        Int      @default(0)
+  watchTimeSec Int      @default(0)
+  completes    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, date])
+  @@index([videoId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — creator collaboration / joint development
+// ---------------------------------------------------------------------------
+
+enum CollaborationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CollaboratorRole {
+  OWNER
+  COCREATOR
+}
+
+enum CollaboratorStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+}
+
+model Collaboration {
+  id        String              @id @default(cuid())
+  title     String
+  ownerId   String
+  videoId   String?
+  status    CollaborationStatus @default(ACTIVE)
+  createdAt DateTime            @default(now())
+
+  owner         CreatorProfile @relation("CollabOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  video         Video?         @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  collaborators Collaborator[]
+  notes         ProjectNote[]
+
+  @@index([ownerId])
+}
+
+model Collaborator {
+  id              String             @id @default(cuid())
+  collaborationId String
+  creatorId       String
+  role            CollaboratorRole   @default(COCREATOR)
+  status          CollaboratorStatus @default(INVITED)
+  sharePct        Int                @default(0)
+  createdAt       DateTime           @default(now())
+
+  collaboration Collaboration  @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+  creator       CreatorProfile @relation("CollabMember", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([collaborationId, creatorId])
+  @@index([creatorId])
+}
+
+model ProjectNote {
+  id              String   @id @default(cuid())
+  collaborationId String
+  authorId        String
+  body            String
+  createdAt       DateTime @default(now())
+
+  collaboration Collaboration  @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+  author        CreatorProfile @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([collaborationId])
+}

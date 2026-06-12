@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: aitube-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aitube
+      POSTGRES_PASSWORD: aitube
+      POSTGRES_DB: aitube
+    ports:
+      # Host 5433 -> container 5432. Avoids colliding with a native Postgres that
+      # may already be on host :5432 (common on Windows dev machines).
+      - "5433:5432"
+    volumes:
+      - aitube-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitube -d aitube"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  aitube-db-data:
