@@ -5,6 +5,17 @@ import type { RatingTriple } from "@/lib/quality";
 import type { FeedSection, RecommenderService, VideoSummary } from "./types";
 import { rankVideos } from "./rank";
 
+const GENRE_LABEL: Record<Genre, string> = {
+  SCIFI: "Sci-Fi",
+  ANIME: "Anime",
+  DOCUMENTARY: "Documentary",
+  MUSIC: "Music",
+  COMEDY: "Comedy",
+  FANTASY: "Fantasy",
+  EDUCATION: "Education",
+  ANIMATION: "Animation",
+};
+
 const FALLBACK_VIDEOS: VideoSummary[] = [
   {
     id: "fallback-1",
@@ -49,12 +60,8 @@ const FALLBACK_VIDEOS: VideoSummary[] = [
 
 function buildFallbackSections(): FeedSection[] {
   return [
-    { id: "featured", titleKey: "home.section.featured", items: FALLBACK_VIDEOS },
-    {
-      id: "highly-rated",
-      titleKey: "home.section.highlyRated",
-      items: [...FALLBACK_VIDEOS].sort((a, b) => b.qualityScore - a.qualityScore),
-    },
+    { id: "featured", titleKey: "home.section.featured", genre: null, items: FALLBACK_VIDEOS },
+    { id: "highly-rated", titleKey: "home.section.highlyRated", genre: null, items: [...FALLBACK_VIDEOS].sort((a, b) => b.qualityScore - a.qualityScore) },
   ];
 }
 
@@ -71,7 +78,6 @@ interface RankedVideoInput {
   ratings: RatingTriple[];
 }
 
-// Reads seeded videos from Postgres and ranks them into home-feed sections.
 // Only PUBLISHED videos are ever returned (nothing is viewer-visible pre-publish).
 export const mockRecommender: RecommenderService = {
   async getHomeFeed(): Promise<FeedSection[]> {
@@ -113,14 +119,35 @@ export const mockRecommender: RecommenderService = {
         ratingCount: r.ratingCount,
       });
 
-      const highlyRated = ranked.slice(0, 6).map(toSummary);
-      const featured = [...ranked]
-        .sort((a, b) => a.title.localeCompare(b.title))
-        .map(toSummary);
+      const allSummaries = ranked.map(toSummary);
+      const highlyRated = allSummaries.slice(0, 10);
+      const featured = allSummaries.slice(0, 5);
+
+      // Build per-genre rows for genres that have ≥2 videos
+      const byGenre = new Map<Genre, VideoSummary[]>();
+      for (const v of allSummaries) {
+        const list = byGenre.get(v.genre) ?? [];
+        list.push(v);
+        byGenre.set(v.genre, list);
+      }
+      const genreSections: FeedSection[] = [];
+      for (const [genre, items] of byGenre.entries()) {
+        if (items.length < 2) continue;
+        genreSections.push({
+          id: `genre-${genre.toLowerCase()}`,
+          titleKey: "",
+          genre,
+          genreLabel: GENRE_LABEL[genre],
+          items,
+        });
+      }
+      // Sort genre rows by total items desc so biggest rows come first
+      genreSections.sort((a, b) => b.items.length - a.items.length);
 
       return [
-        { id: "featured", titleKey: "home.section.featured", items: featured },
-        { id: "highly-rated", titleKey: "home.section.highlyRated", items: highlyRated },
+        { id: "featured", titleKey: "home.section.featured", genre: null, items: featured },
+        { id: "highly-rated", titleKey: "home.section.highlyRated", genre: null, items: highlyRated },
+        ...genreSections,
       ];
     } catch (error) {
       console.warn("Falling back to static homepage feed because Prisma is unavailable:", error);

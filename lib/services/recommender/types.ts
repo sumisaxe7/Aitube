@@ -19,6 +19,10 @@ export interface FeedSection {
   id: string;
   /** i18n key resolved on the page (strings stay out of the service). */
   titleKey: string;
+  /** null for curated rows; Genre value for per-genre rows. */
+  genre: Genre | null;
+  /** Human-readable label for genre rows e.g. "Sci-Fi". */
+  genreLabel?: string;
   items: VideoSummary[];
 }
 

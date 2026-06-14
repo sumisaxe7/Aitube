@@ -91,7 +91,7 @@ export default async function CreatorPage({
       {summaries.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {summaries.map((v) => (
-            <VideoCard key={v.id} video={v} t={t} />
+            <VideoCard key={v.id} video={v} labels={{ aiVerified: t("badge.aiVerified"), aiVerifiedTitle: t("badge.aiVerifiedTitle"), noRatings: t("video.noRatings") }} />
           ))}
         </div>
       )}
