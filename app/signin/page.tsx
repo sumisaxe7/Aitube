@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { signInAsCreator } from "@/app/actions/auth";
+import { signInAsCreator, signInWithGoogle } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DEFAULT_LOCALE, getTranslator } from "@/lib/i18n";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function SignInPage() {
   const t = getTranslator(DEFAULT_LOCALE);
   const session = await auth();
-  if (session?.user?.creatorId) redirect("/studio");
+  if (session?.user?.id) redirect("/studio");
 
   const creators = await prisma.creatorProfile.findMany({
     orderBy: { displayName: "asc" },
@@ -28,6 +28,14 @@ export default async function SignInPage() {
           <p className="mb-4 text-sm text-muted-foreground">
             {t("signin.subtitle")}
           </p>
+          {process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? (
+            <form action={signInWithGoogle} className="mb-4">
+              <Button type="submit" variant="outline" className="w-full">
+                Continue with Google
+              </Button>
+            </form>
+          ) : null}
+
           <form action={signInAsCreator} className="space-y-3">
             <select
               name="handle"

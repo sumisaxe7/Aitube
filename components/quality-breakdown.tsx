@@ -32,7 +32,7 @@ export function QualityBreakdown({
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">{t("quality.title")}</CardTitle>
         {quality.rated ? (
-          <div className="text-right">
+          <div className="text-end">
             <div className="text-2xl font-bold leading-none">
               {quality.score.toFixed(2)}
               <span className="text-sm font-normal text-muted-foreground">

@@ -65,9 +65,52 @@ env var (default `mock`). **Callers never change** — only the env var + a regi
 | Moderation + deepfake | `MODERATION_PROVIDER` | [`lib/services/moderation`](lib/services/moderation) | Hive Moderation / AWS Rekognition |
 | Provenance (C2PA) | `PROVENANCE_PROVIDER` | [`lib/services/provenance`](lib/services/provenance) | C2PA / Content Credentials SDK |
 | Video pipeline | `VIDEO_PROVIDER` | [`lib/services/video`](lib/services/video) | Mux |
-| Payments | `PAYMENTS_PROVIDER` | [`lib/services/payments`](lib/services/payments) | Stripe Connect |
+| Payments | `PAYMENTS_PROVIDER` | [`lib/services/payments`](lib/services/payments) | Stripe Connect ✅ implemented |
 | Recommender | `RECOMMENDER_PROVIDER` | [`lib/services/recommender`](lib/services/recommender) | Recombee / Amazon Personalize |
 | Help bot LLM | `HELPBOT_PROVIDER` | [`lib/services/helpBot`](lib/services/helpBot) | Claude / any LLM |
+
+## Real payments (Stripe Connect, test mode)
+
+Payments has a real implementation alongside the mock. To enable it:
+
+1. **Get test-mode keys** from the [Stripe dashboard](https://dashboard.stripe.com/test/apikeys)
+   (toggle "Test mode" on). You don't need a live/verified account for any of this.
+2. **Install the SDK** (already in `package.json`): `npm install`
+3. **Run the new migration** for the Connect fields added to `CreatorProfile`:
+   ```bash
+   npx prisma migrate dev --name add_stripe_connect
+   ```
+4. **Set env vars** in `.env`:
+   ```bash
+   PAYMENTS_PROVIDER="stripe"
+   STRIPE_SECRET_KEY="sk_test_..."
+   STRIPE_PUBLISHABLE_KEY="pk_test_..."
+   STRIPE_WEBHOOK_SECRET="whsec_..."   # from step 5
+   APP_BASE_URL="http://localhost:3000"
+   ```
+5. **Forward webhooks locally** with the [Stripe CLI](https://stripe.com/docs/stripe-cli):
+   ```bash
+   stripe login
+   stripe listen --forward-to localhost:3000/api/stripe/webhook
+   ```
+   Copy the `whsec_...` it prints into `STRIPE_WEBHOOK_SECRET`.
+6. **Connect a creator's payout account**: sign in as a creator → `/studio/monetization` →
+   "Connect with Stripe". This creates a Stripe Express account and walks through onboarding
+   using Stripe's test data (any details work in test mode — use `000 000 0000` for phone,
+   `4000 0000 0000 0000` won't be needed here since this is identity onboarding, not a card).
+7. **Subscribe / tip as a viewer**: the buttons now redirect to Stripe Checkout. Use test card
+   `4242 4242 4242 4242`, any future expiry, any CVC. On success, Stripe redirects back and the
+   `checkout.session.completed` webhook writes the `Subscription` + immutable `LedgerEntry` rows
+   (the same rows the mock wrote synchronously).
+8. **Recurring renewals**: Stripe's `invoice.paid` webhook appends another ledger row each billing
+   cycle — trigger one early in test mode from the Stripe dashboard ("Subscriptions" → the test
+   subscription → "..." → "Update subscription" → advance the billing cycle, or use
+   `stripe trigger invoice.paid`).
+
+Revenue split: `application_fee_percent` / `application_fee_amount` on the Connect charge mirrors
+`lib/revenue.computeSplit` exactly, so Stripe itself enforces the same split the ledger records.
+
+To go back to mocks at any time, set `PAYMENTS_PROVIDER="mock"` — no other code changes needed.
 
 ## Project layout
 ```

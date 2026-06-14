@@ -95,12 +95,28 @@ function posterSvg(title: string, creator: string, genre: Genre): string {
 
 // --- seed data -------------------------------------------------------------
 
-const creators = [
+type SeedCreator = {
+  handle: string;
+  displayName: string;
+  email: string;
+  bio: string;
+  role?: "ADMIN" | "CREATOR";
+};
+
+const creators: SeedCreator[] = [
+  {
+    handle: "admin",
+    displayName: "AItube Admin",
+    email: "admin@aitube.local",
+    bio: "Platform administrator with access to all videos.",
+    role: "ADMIN" as const,
+  },
   {
     handle: "novaframe",
     displayName: "NovaFrame Studio",
     email: "nova@aitube.local",
     bio: "Cinematic AI sci-fi shorts. Founding creator.",
+    role: "CREATOR" as const,
   },
   {
     handle: "inkmotion",
@@ -184,7 +200,7 @@ async function main() {
       data: {
         name: c.displayName,
         email: c.email,
-        role: "CREATOR",
+        role: c.role ?? "CREATOR",
         creatorProfile: {
           create: { handle: c.handle, displayName: c.displayName, bio: c.bio },
         },

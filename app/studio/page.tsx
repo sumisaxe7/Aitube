@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { auth } from "@/lib/auth";
 import { getCurrentCreator } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
+import { DeleteVideoButton } from "@/components/delete-video-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DEFAULT_LOCALE, getTranslator } from "@/lib/i18n";
 
@@ -14,9 +16,11 @@ export default async function StudioPage() {
   const creator = await getCurrentCreator();
   if (!creator) redirect("/signin");
 
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
   const t = getTranslator(DEFAULT_LOCALE);
   const videos = await prisma.video.findMany({
-    where: { creatorId: creator.id },
+    where: isAdmin ? {} : { creatorId: creator.id },
     include: { processing: true },
     orderBy: { createdAt: "desc" },
   });
@@ -70,17 +74,20 @@ export default async function StudioPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <StatusBadge status={v.status} t={t} />
-                  {v.status === "PUBLISHED" ? (
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/watch/${v.id}`}>{t("studio.view")}</Link>
-                    </Button>
-                  ) : (
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/studio/help?video=${v.id}`}>
-                        {t("studio.askWhy")}
-                      </Link>
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {v.status === "PUBLISHED" ? (
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/watch/${v.id}`}>{t("studio.view")}</Link>
+                      </Button>
+                    ) : (
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/studio/help?video=${v.id}`}>
+                          {t("studio.askWhy")}
+                        </Link>
+                      </Button>
+                    )}
+                    <DeleteVideoButton videoId={v.id} label={t("studio.delete")} />
+                  </div>
                 </div>
               </CardContent>
             </Card>

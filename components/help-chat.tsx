@@ -75,7 +75,7 @@ export function HelpChat({
               className={cn(
                 "max-w-[85%] rounded-lg px-3 py-2 text-sm",
                 m.role === "user"
-                  ? "ml-auto bg-primary text-primary-foreground"
+                  ? "ms-auto bg-primary text-primary-foreground"
                   : "bg-muted",
               )}
             >
