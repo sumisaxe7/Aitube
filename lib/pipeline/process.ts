@@ -7,7 +7,9 @@ import type { PipelineStep } from "@prisma/client";
 // Local async simulation: the upload route fires this un-awaited and the client
 // polls ProcessingStatus.step. Real impl swaps this body onto a queue worker —
 // the service interfaces don't change.
-const STEP_DELAY_MS = Number(process.env.PIPELINE_STEP_DELAY_MS ?? 800);
+// Default 0 in production (Vercel has function time limits); set to 800 locally
+// via PIPELINE_STEP_DELAY_MS env var for a visible step-by-step animation.
+const STEP_DELAY_MS = Number(process.env.PIPELINE_STEP_DELAY_MS ?? 0);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function setStep(videoId: string, step: PipelineStep) {

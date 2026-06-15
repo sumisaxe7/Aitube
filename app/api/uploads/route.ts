@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { Genre } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
@@ -102,8 +102,8 @@ export async function POST(request: Request) {
     });
   }
 
-  // Fire-and-forget: pipeline advances steps while the client polls.
-  void processUpload(newVideo.id, simulate);
+  // Run pipeline after the response is sent so Vercel doesn't kill it mid-way.
+  after(() => processUpload(newVideo.id, simulate));
 
   return NextResponse.json(
     {
