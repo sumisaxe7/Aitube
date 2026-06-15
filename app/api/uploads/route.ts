@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
-
 import { NextResponse } from "next/server";
 import { Genre } from "@prisma/client";
 
@@ -8,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentCreator } from "@/lib/session";
 import type { SimulateScenario } from "@/lib/services/simulate";
 import { processUpload } from "@/lib/pipeline/process";
-import { storeVideoInMongo } from "@/lib/storage/video-store";
+import { video as videoService } from "@/lib/services/video";
 import { getFileSizeLimit } from "@/lib/upload-limit";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +19,10 @@ const SIMULATE_VALUES: SimulateScenario[] = [
   "not_ai",
 ];
 
-// POST /api/uploads — accept multipart/form-data, save file to disk, kick pipeline.
+// POST /api/uploads — create a video record and return a Mux direct-upload URL.
+// The server never receives or buffers video bytes — the client PUTs directly to
+// Mux CDN. Thumbnails are omitted from the payload (Mux auto-generates them),
+// keeping the request well under Vercel's 4.5 MB function payload limit.
 export async function POST(request: Request) {
   const creator = await getCurrentCreator();
   if (!creator) {
@@ -50,17 +50,20 @@ export async function POST(request: Request) {
   )
     ? (simulateRaw as SimulateScenario)
     : undefined;
-  const maxBytes = getFileSizeLimit(process.env.FILE_SIZE_LIMIT);
-  const file = formData.get("file") as File | null;
-  if (file && file.size > maxBytes) {
-    return NextResponse.json(
-      { error: "File exceeds the configured size limit." },
-      { status: 413 },
-    );
+
+  // Size check via metadata field — client sends File.size, not the bytes.
+  const fileSizeRaw = formData.get("fileSizeBytes");
+  if (fileSizeRaw) {
+    const fileSize = Number(fileSizeRaw);
+    const maxBytes = getFileSizeLimit(process.env.FILE_SIZE_LIMIT);
+    if (fileSize > maxBytes) {
+      return NextResponse.json(
+        { error: "File exceeds the configured size limit." },
+        { status: 413 },
+      );
+    }
   }
-  const thumbnailDataUrl = formData.get("thumbnailDataUrl")
-    ? String(formData.get("thumbnailDataUrl"))
-    : null;
+
   const durationSec =
     parseInt(String(formData.get("durationSec") ?? "0"), 10) || 0;
 
@@ -80,45 +83,35 @@ export async function POST(request: Request) {
       status: "PROCESSING",
       durationSec,
       provenanceVerified: false,
-      posterUrl: thumbnailDataUrl ?? null,
       processing: { create: { step: "QUEUED" } },
     },
   });
 
-  if (file && file.size > 0) {
-    try {
-      const stored = await storeVideoInMongo(newVideo.id, file);
-      if (stored) {
-        await prisma.video.update({
-          where: { id: newVideo.id },
-          data: { videoUrl: stored.url },
-        });
-      } else {
-        const ext = path.extname(file.name) || ".mp4";
-        const uploadsDir = path.join(
-          process.cwd(),
-          "public",
-          "uploads",
-          "videos",
-        );
-        await mkdir(uploadsDir, { recursive: true });
-        const filename = `${newVideo.id}${ext}`;
-        const buffer = Buffer.from(await file.arrayBuffer());
-        await writeFile(path.join(uploadsDir, filename), buffer);
-        await prisma.video.update({
-          where: { id: newVideo.id },
-          data: { videoUrl: `/uploads/videos/${filename}` },
-        });
-      }
-    } catch (err) {
-      console.error("File save error:", err);
-    }
+  // Create a Mux direct-upload URL with passthrough = our video ID so the
+  // webhook can link the Mux asset back to this record without a DB migration.
+  const upload = await videoService.createUpload({ passthrough: newVideo.id });
+
+  const isMux = process.env.VIDEO_PROVIDER === "mux";
+
+  // Store the upload ID so the playback-polling endpoint can resolve it to an
+  // asset ID via the Mux API (needed when webhook can't reach localhost in dev).
+  if (isMux && upload.uploadId) {
+    await prisma.video.update({
+      where: { id: newVideo.id },
+      data: { videoUrl: `mux-upload:${upload.uploadId}` },
+    });
   }
 
   // Fire-and-forget: pipeline advances steps while the client polls.
   void processUpload(newVideo.id, simulate);
 
-  return NextResponse.json({ videoId: newVideo.id }, { status: 201 });
+  return NextResponse.json(
+    {
+      videoId: newVideo.id,
+      ...(isMux ? { muxUploadUrl: upload.uploadUrl } : {}),
+    },
+    { status: 201 },
+  );
 }
 
 // GET /api/uploads — the signed-in creator's uploads with their statuses.

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm -v)",
       "Bash(docker -v)",
-      "Bash(git -v)"
+      "Bash(git -v)",
+      "Bash(npx tsc *)"
     ]
   }
 }

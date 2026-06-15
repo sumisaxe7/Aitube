@@ -38,6 +38,7 @@ export async function POST(request: Request) {
         asset.id,
         playback.id,
         asset.duration ? Math.round(asset.duration) : 0,
+        asset.passthrough ?? null,
       );
     }
   }

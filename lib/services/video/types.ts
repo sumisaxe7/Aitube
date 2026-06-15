@@ -15,7 +15,7 @@ export interface TranscodeResult {
 }
 
 export interface VideoService {
-  createUpload(): Promise<CreateUploadResult>;
+  createUpload(opts?: { passthrough?: string }): Promise<CreateUploadResult>;
   getTranscodeStatus(assetId: string): Promise<TranscodeResult>;
   getPlaybackUrl(playbackId: string): string;
 }
