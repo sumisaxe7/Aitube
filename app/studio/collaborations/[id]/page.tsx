@@ -184,14 +184,14 @@ export default async function CollaborationDetail({
               <form action={distributeAction} className="flex items-end gap-2">
                 <input type="hidden" name="collaborationId" value={collab.id} />
                 <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  <span className="absolute start-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     $
                   </span>
                   <input
                     name="amount"
                     defaultValue="20"
                     inputMode="decimal"
-                    className={`w-full py-2 pl-6 pr-3 ${inputCls.replace("px-3 py-2", "")}`}
+                    className={`w-full py-2 ps-6 pe-3 ${inputCls.replace("px-3 py-2", "")}`}
                   />
                 </div>
                 <Button type="submit">{t("collab.distributeBtn")}</Button>

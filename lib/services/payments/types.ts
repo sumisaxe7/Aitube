@@ -23,6 +23,16 @@ export interface PaymentResult {
   netCents: number;
   currency: Currency;
   createdAt: string;
+  /**
+   * Set by real (redirect-based) providers: the caller must redirect the
+   * browser here to complete payment. When set, `pending` is true and the
+   * ledger row is NOT written yet — the Stripe webhook writes it once
+   * `checkout.session.completed` fires. The mock provider never sets this;
+   * it settles synchronously.
+   */
+  checkoutUrl?: string;
+  /** True when settlement is asynchronous (awaiting checkoutUrl completion). */
+  pending?: boolean;
 }
 
 export interface Balance {

@@ -30,11 +30,18 @@ export async function POST(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  await payments.createTip({
+  const result = await payments.createTip({
     creatorId: creator.id,
     fromUserId: user.id,
     amountCents,
   });
+
+  // Real providers (Stripe) settle asynchronously: redirect the browser to
+  // Checkout. The ledger entry is written by the webhook once
+  // checkout.session.completed fires — not here.
+  if (result.pending && result.checkoutUrl) {
+    return NextResponse.json({ checkoutUrl: result.checkoutUrl }, { status: 200 });
+  }
 
   const split = computeSplit(amountCents);
   const entry = await prisma.ledgerEntry.create({

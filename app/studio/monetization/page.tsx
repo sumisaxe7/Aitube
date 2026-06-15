@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { prisma } from "@/lib/db";
 import { getCurrentCreator } from "@/lib/session";
 import { getCreatorMonetization } from "@/lib/monetization";
 import { creatorSharePct } from "@/lib/revenue";
 import { PriceForm } from "@/components/price-form";
+import { PayoutConnect } from "@/components/payout-connect";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DEFAULT_LOCALE, getTranslator } from "@/lib/i18n";
 import { formatUsd } from "@/lib/utils";
+import { getStripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +24,27 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default async function MonetizationPage() {
-  const creator = await getCurrentCreator();
+export default async function MonetizationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ stripe?: string }>;
+}) {
+  let creator = await getCurrentCreator();
   if (!creator) redirect("/signin");
+
+  // Returning from Stripe Connect onboarding: re-check status so the badge
+  // flips to "connected" without waiting for the next webhook/poll.
+  const { stripe } = await searchParams;
+  if (stripe === "return" && creator.stripeAccountId && process.env.PAYMENTS_PROVIDER === "stripe") {
+    const account = await getStripe().accounts.retrieve(creator.stripeAccountId);
+    const onboarded = Boolean(account.details_submitted);
+    if (onboarded !== creator.stripeOnboarded) {
+      creator = await prisma.creatorProfile.update({
+        where: { id: creator.id },
+        data: { stripeOnboarded: onboarded },
+      });
+    }
+  }
 
   const t = getTranslator(DEFAULT_LOCALE);
   const mon = await getCreatorMonetization(creator.id);
@@ -81,6 +102,19 @@ export default async function MonetizationPage() {
               {q.topQualityScore.toFixed(2)}
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("monetize.payouts")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PayoutConnect
+            enabled={process.env.PAYMENTS_PROVIDER === "stripe"}
+            onboarded={creator.stripeOnboarded}
+            hasAccount={Boolean(creator.stripeAccountId)}
+          />
         </CardContent>
       </Card>
 

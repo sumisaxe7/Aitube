@@ -9,7 +9,7 @@ export function scoreVideo(ratings: RatingTriple[]): number {
 }
 
 export function rankVideos<T extends { ratings: RatingTriple[] }>(
-  videos: T[],
+  videos: Array<T>,
 ): Array<T & { qualityScore: number; ratingCount: number }> {
   return videos
     .map((v) => ({

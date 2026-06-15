@@ -41,14 +41,14 @@ export function PriceForm({
         <label className="flex-1 space-y-1">
           <span className="text-sm font-medium">{t("monetize.priceLabel")}</span>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            <span className="absolute start-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
               $
             </span>
             <input
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               inputMode="decimal"
-              className="w-full rounded-md border border-input bg-background py-2 pl-6 pr-3 text-sm"
+              className="w-full rounded-md border border-input bg-background py-2 ps-6 pe-3 text-sm"
             />
           </div>
         </label>

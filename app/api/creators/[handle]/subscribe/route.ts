@@ -29,14 +29,21 @@ export async function POST(
   }
 
   const price = creator.subscriptionPriceCents;
-  // Simulate the processor charge (Stripe later).
-  await payments.createSubscription({
+  const result = await payments.createSubscription({
     creatorId: creator.id,
     subscriberId: user.id,
     priceCents: price,
   });
 
-  // Authoritative split + append-only ledger row, written atomically.
+  // Real providers (Stripe) settle asynchronously: redirect the browser to
+  // Checkout. The Subscription row + ledger entry are written by the webhook
+  // once checkout.session.completed fires — not here.
+  if (result.pending && result.checkoutUrl) {
+    return NextResponse.json({ checkoutUrl: result.checkoutUrl }, { status: 200 });
+  }
+
+  // Mock provider settles synchronously: authoritative split + append-only
+  // ledger row, written atomically.
   const split = computeSplit(price);
   const [subscription, entry] = await prisma.$transaction([
     prisma.subscription.upsert({

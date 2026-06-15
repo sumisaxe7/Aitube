@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
-
 import { NextResponse } from "next/server";
 import { Genre } from "@prisma/client";
 
@@ -8,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { getCurrentCreator } from "@/lib/session";
 import type { SimulateScenario } from "@/lib/services/simulate";
 import { processUpload } from "@/lib/pipeline/process";
+import { video as videoService } from "@/lib/services/video";
+import { getFileSizeLimit } from "@/lib/upload-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +19,10 @@ const SIMULATE_VALUES: SimulateScenario[] = [
   "not_ai",
 ];
 
-// POST /api/uploads — accept multipart/form-data, save file to disk, kick pipeline.
+// POST /api/uploads — create a video record and return a direct upload URL.
+// When VIDEO_PROVIDER=mux the client PUTs the file straight to Mux; the server
+// never buffers the video bytes.  When VIDEO_PROVIDER=mock the client skips the
+// PUT step entirely (no real file is needed for mock pipeline execution).
 export async function POST(request: Request) {
   const creator = await getCurrentCreator();
   if (!creator) {
@@ -48,7 +50,20 @@ export async function POST(request: Request) {
   )
     ? (simulateRaw as SimulateScenario)
     : undefined;
-  const file = formData.get("file") as File | null;
+
+  // File size check via a metadata field (client reads File.size before POST).
+  const fileSizeRaw = formData.get("fileSizeBytes");
+  if (fileSizeRaw) {
+    const fileSize = Number(fileSizeRaw);
+    const maxBytes = getFileSizeLimit(process.env.FILE_SIZE_LIMIT);
+    if (fileSize > maxBytes) {
+      return NextResponse.json(
+        { error: "File exceeds the configured size limit." },
+        { status: 413 },
+      );
+    }
+  }
+
   const durationSec =
     parseInt(String(formData.get("durationSec") ?? "0"), 10) || 0;
 
@@ -72,35 +87,32 @@ export async function POST(request: Request) {
     },
   });
 
-  // Persist the uploaded file under public/uploads/videos/{videoId}.{ext}.
-  // Next.js serves the public/ directory statically, so the URL is /uploads/videos/{file}.
-  if (file && file.size > 0) {
-    try {
-      const ext = path.extname(file.name) || ".mp4";
-      const uploadsDir = path.join(
-        process.cwd(),
-        "public",
-        "uploads",
-        "videos",
-      );
-      await mkdir(uploadsDir, { recursive: true });
-      const filename = `${newVideo.id}${ext}`;
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await writeFile(path.join(uploadsDir, filename), buffer);
-      await prisma.video.update({
-        where: { id: newVideo.id },
-        data: { videoUrl: `/uploads/videos/${filename}` },
-      });
-    } catch (err) {
-      // Non-fatal: pipeline runs without the file; creator can see status.
-      console.error("File save error:", err);
-    }
+  // Obtain a direct upload URL from the video provider.
+  // For Mux this is a real signed URL the client will PUT the file to directly.
+  // For mock the URL is never used — the client skips the PUT step.
+  const upload = await videoService.createUpload({ passthrough: newVideo.id });
+
+  const isMux = process.env.VIDEO_PROVIDER === "mux";
+
+  // Store the Mux upload ID so the playback-status poller can resolve it to
+  // an asset ID without needing the webhook to reach localhost.
+  if (isMux && upload.uploadId) {
+    await prisma.video.update({
+      where: { id: newVideo.id },
+      data: { videoUrl: `mux-upload:${upload.uploadId}` },
+    });
   }
 
   // Fire-and-forget: pipeline advances steps while the client polls.
   void processUpload(newVideo.id, simulate);
 
-  return NextResponse.json({ videoId: newVideo.id }, { status: 201 });
+  return NextResponse.json(
+    {
+      videoId: newVideo.id,
+      ...(isMux ? { muxUploadUrl: upload.uploadUrl } : {}),
+    },
+    { status: 201 },
+  );
 }
 
 // GET /api/uploads — the signed-in creator's uploads with their statuses.

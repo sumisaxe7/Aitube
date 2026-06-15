@@ -90,6 +90,11 @@ model CreatorProfile {
   bio                    String?
   avatarUrl              String?
   subscriptionPriceCents Int? // creator-set monthly price; null until they set one
+  // Stripe Connect (Express) payout account. Null until the creator completes
+  // onboarding via /api/creators/connect. stripeOnboarded mirrors Stripe's
+  // `details_submitted` so the UI can gate "you're ready to get paid".
+  stripeAccountId        String?
+  stripeOnboarded        Boolean  @default(false)
   createdAt              DateTime @default(now())
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -131,6 +136,8 @@ model Video {
   status             VideoStatus @default(PUBLISHED)
   posterUrl          String?
   videoUrl           String? // local path served from /uploads/videos/; null for seeded/mock rows
+  muxAssetId         String? // Mux asset ID, set after transcoding is submitted
+  muxPlaybackId      String? // Mux playback ID, set when asset status = ready
   durationSec        Int         @default(0)
   // Provenance / "AI-Verified" badge inputs (surfaced in Phase 1).
   aiModel            String?

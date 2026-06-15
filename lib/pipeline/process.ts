@@ -35,6 +35,11 @@ export async function processUpload(
     const videoStatus = decisionToVideoStatus(report.decision);
     const published = report.decision === "PUBLISH";
 
+    // With Mux Direct Upload the client already PUT the file to Mux before the
+    // pipeline ran, so there is nothing to ingest here.  The Mux webhook will
+    // fire video.asset.ready and set muxAssetId + muxPlaybackId once ready.
+    // For non-Mux providers (mock, future S3) the old submitToMux path could be
+    // restored, but for now it is intentionally skipped.
     await prisma.$transaction([
       prisma.processingStatus.update({
         where: { videoId },

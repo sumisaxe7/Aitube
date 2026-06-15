@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { VideoPlayer } from "@/components/video-player";
 
 import { prisma } from "@/lib/db";
-import { getSessionUser } from "@/lib/session";
+import { getCurrentCreator, getSessionUser } from "@/lib/session";
+import { auth } from "@/lib/auth";
 import { weightedQualityScore } from "@/lib/quality";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { ProvenancePanel } from "@/components/provenance-panel";
@@ -9,7 +11,9 @@ import { ViewBeacon } from "@/components/view-beacon";
 import { QualityBreakdown } from "@/components/quality-breakdown";
 import { RatingWidget } from "@/components/rating-widget";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DeleteVideoButton } from "@/components/delete-video-button";
 import { DEFAULT_LOCALE, getTranslator } from "@/lib/i18n";
 import { formatDuration } from "@/lib/utils";
 
@@ -23,6 +27,9 @@ export default async function WatchPage({
   const { id } = await params;
   const t = getTranslator(DEFAULT_LOCALE);
   const user = await getSessionUser();
+  const creator = await getCurrentCreator();
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
 
   const video = await prisma.video.findUnique({
     where: { id },
@@ -63,31 +70,12 @@ export default async function WatchPage({
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_320px]">
       <ViewBeacon videoId={video.id} durationSec={video.durationSec} />
       <div className="space-y-6">
-        {video.videoUrl ? (
-          <video
-            src={video.videoUrl}
-            controls
-            poster={video.posterUrl ?? undefined}
-            className="aspect-video w-full rounded-xl bg-muted"
-          />
-        ) : (
-          <div
-            className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-muted"
-            style={
-              video.posterUrl
-                ? {
-                    backgroundImage: `url(${video.posterUrl})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }
-                : undefined
-            }
-          >
-            <span className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white">
-              ▶ {formatDuration(video.durationSec)}
-            </span>
-          </div>
-        )}
+        <VideoPlayer
+          videoId={video.id}
+          initialPlaybackId={video.muxPlaybackId}
+          initialVideoUrl={video.videoUrl}
+          posterUrl={video.posterUrl}
+        />
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
@@ -101,13 +89,18 @@ export default async function WatchPage({
               </Badge>
             </div>
           </div>
-          {video.provenanceVerified && (
-            <VerifiedBadge
-              label={t("badge.aiVerified")}
-              title={t("badge.aiVerifiedTitle")}
-              model={video.aiModel}
-            />
-          )}
+          <div className="flex items-center gap-2">
+            {video.provenanceVerified && (
+              <VerifiedBadge
+                label={t("badge.aiVerified")}
+                title={t("badge.aiVerifiedTitle")}
+                model={video.aiModel}
+              />
+            )}
+            {(creator?.id === video.creatorId || isAdmin) && (
+              <DeleteVideoButton videoId={video.id} label={t("studio.delete")} />
+            )}
+          </div>
         </div>
 
         {video.description && <p className="text-sm">{video.description}</p>}

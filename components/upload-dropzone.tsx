@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { DEFAULT_FILE_SIZE_LIMIT_MB, getFileSizeLimit } from "@/lib/upload-limit";
 
 type Translate = (key: string) => string;
 
@@ -19,6 +20,7 @@ export function UploadDropzone({
 }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const maxBytes = getFileSizeLimit(process.env.NEXT_PUBLIC_FILE_SIZE_LIMIT);
 
   return (
     <div
@@ -32,7 +34,13 @@ export function UploadDropzone({
         setDragging(false);
         if (disabled) return;
         const f = e.dataTransfer.files?.[0];
-        if (f) onFile(f);
+        if (f) {
+          if (f.size > maxBytes) {
+            window.alert(`File must be ${DEFAULT_FILE_SIZE_LIMIT_MB} MB or smaller.`);
+            return;
+          }
+          onFile(f);
+        }
       }}
       onClick={() => !disabled && inputRef.current?.click()}
       className={cn(
@@ -48,14 +56,21 @@ export function UploadDropzone({
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) onFile(f);
+          if (f) {
+            if (f.size > maxBytes) {
+              window.alert(`File must be ${DEFAULT_FILE_SIZE_LIMIT_MB} MB or smaller.`);
+              e.target.value = "";
+              return;
+            }
+            onFile(f);
+          }
         }}
       />
       <p className="font-medium">{file ? file.name : t("upload.dropzone")}</p>
       <p className="text-xs text-muted-foreground">
         {file
-          ? `${(file.size / 1024 / 1024).toFixed(1)} MB`
-          : t("upload.dropzoneHint")}
+          ? `${(file.size / 1024 / 1024).toFixed(1)} MB of ${DEFAULT_FILE_SIZE_LIMIT_MB} MB allowed`
+          : `${t("upload.dropzoneHint")} (max ${DEFAULT_FILE_SIZE_LIMIT_MB} MB)`}
       </p>
     </div>
   );

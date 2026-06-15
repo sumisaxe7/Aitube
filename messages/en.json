@@ -50,7 +50,9 @@
       "titlePlaceholder": "Give your video a title",
       "genre": "Genre",
       "description": "Description",
-      "descriptionPlaceholder": "Optional"
+      "descriptionPlaceholder": "Optional",
+      "thumbnail": "Select thumbnail (optional)",
+      "thumbnailHint": "Use a custom image, or leave blank to use the first video frame."
     },
     "simulate": {
       "label": "Simulate pipeline outcome (dev)",
@@ -98,7 +100,8 @@
     "title": "Your studio",
     "empty": "No uploads yet. Start your first verified upload.",
     "view": "View",
-    "askWhy": "Ask why"
+    "askWhy": "Ask why",
+    "delete": "Delete Video"
   },
   "help": {
     "title": "Creator help bot",
@@ -172,7 +175,14 @@
     "notMonetizedYet": "This creator isn't monetized yet, but you can tip them.",
     "selfHint": "This is your own creator page.",
     "signInPrompt": "Sign in to subscribe or tip —",
-    "error": "Something went wrong."
+    "error": "Something went wrong.",
+    "payouts": "Payouts",
+    "payoutsConnected": "Stripe payouts connected — you're ready to get paid.",
+    "payoutsNotConnected": "Connect a Stripe account to receive subscriptions and tips.",
+    "connectStripe": "Connect with Stripe",
+    "connectPending": "Stripe account created — finish onboarding to receive payouts.",
+    "continueOnboarding": "Continue onboarding",
+    "redirecting": "Redirecting to Stripe…"
   },
   "analytics": {
     "title": "Analytics",
