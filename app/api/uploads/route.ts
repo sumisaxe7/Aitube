@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentCreator } from "@/lib/session";
 import type { SimulateScenario } from "@/lib/services/simulate";
 import { processUpload } from "@/lib/pipeline/process";
-import { video as videoService } from "@/lib/services/video";
+import { storeVideoInMongo } from "@/lib/storage/video-store";
 import { getFileSizeLimit } from "@/lib/upload-limit";
 
 export const dynamic = "force-dynamic";
@@ -50,20 +50,17 @@ export async function POST(request: Request) {
   )
     ? (simulateRaw as SimulateScenario)
     : undefined;
-
-  // File size check via a metadata field (client reads File.size before POST).
-  const fileSizeRaw = formData.get("fileSizeBytes");
-  if (fileSizeRaw) {
-    const fileSize = Number(fileSizeRaw);
-    const maxBytes = getFileSizeLimit(process.env.FILE_SIZE_LIMIT);
-    if (fileSize > maxBytes) {
-      return NextResponse.json(
-        { error: "File exceeds the configured size limit." },
-        { status: 413 },
-      );
-    }
+  const maxBytes = getFileSizeLimit(process.env.FILE_SIZE_LIMIT);
+  const file = formData.get("file") as File | null;
+  if (file && file.size > maxBytes) {
+    return NextResponse.json(
+      { error: "File exceeds the configured size limit." },
+      { status: 413 },
+    );
   }
-
+  const thumbnailDataUrl = formData.get("thumbnailDataUrl")
+    ? String(formData.get("thumbnailDataUrl"))
+    : null;
   const durationSec =
     parseInt(String(formData.get("durationSec") ?? "0"), 10) || 0;
 
@@ -83,24 +80,39 @@ export async function POST(request: Request) {
       status: "PROCESSING",
       durationSec,
       provenanceVerified: false,
+      posterUrl: thumbnailDataUrl ?? null,
       processing: { create: { step: "QUEUED" } },
     },
   });
 
-  // Obtain a direct upload URL from the video provider.
-  // For Mux this is a real signed URL the client will PUT the file to directly.
-  // For mock the URL is never used — the client skips the PUT step.
-  const upload = await videoService.createUpload({ passthrough: newVideo.id });
-
-  const isMux = process.env.VIDEO_PROVIDER === "mux";
-
-  // Store the Mux upload ID so the playback-status poller can resolve it to
-  // an asset ID without needing the webhook to reach localhost.
-  if (isMux && upload.uploadId) {
-    await prisma.video.update({
-      where: { id: newVideo.id },
-      data: { videoUrl: `mux-upload:${upload.uploadId}` },
-    });
+  if (file && file.size > 0) {
+    try {
+      const stored = await storeVideoInMongo(newVideo.id, file);
+      if (stored) {
+        await prisma.video.update({
+          where: { id: newVideo.id },
+          data: { videoUrl: stored.url },
+        });
+      } else {
+        const ext = path.extname(file.name) || ".mp4";
+        const uploadsDir = path.join(
+          process.cwd(),
+          "public",
+          "uploads",
+          "videos",
+        );
+        await mkdir(uploadsDir, { recursive: true });
+        const filename = `${newVideo.id}${ext}`;
+        const buffer = Buffer.from(await file.arrayBuffer());
+        await writeFile(path.join(uploadsDir, filename), buffer);
+        await prisma.video.update({
+          where: { id: newVideo.id },
+          data: { videoUrl: `/uploads/videos/${filename}` },
+        });
+      }
+    } catch (err) {
+      console.error("File save error:", err);
+    }
   }
 
   // Fire-and-forget: pipeline advances steps while the client polls.

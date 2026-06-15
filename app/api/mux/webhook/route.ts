@@ -34,13 +34,10 @@ export async function POST(request: Request) {
       (p: { policy: string }) => p.policy === "public",
     );
     if (asset.id && playback?.id) {
-      // `passthrough` holds the AItube video ID when the upload was created via
-      // Direct Upload (the new path).  Fall back to legacy muxAssetId lookup.
       await handleMuxAssetReady(
         asset.id,
         playback.id,
         asset.duration ? Math.round(asset.duration) : 0,
-        asset.passthrough ?? null,
       );
     }
   }

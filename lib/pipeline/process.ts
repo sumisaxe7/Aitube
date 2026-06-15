@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { decisionToVideoStatus } from "@/lib/policy";
 import type { SimulateScenario } from "@/lib/services/simulate";
 import { runSafetyPipeline } from "./run";
+import { submitToMux } from "./mux-ingest";
 import type { PipelineStep } from "@prisma/client";
 
 // Local async simulation: the upload route fires this un-awaited and the client
@@ -35,11 +36,17 @@ export async function processUpload(
     const videoStatus = decisionToVideoStatus(report.decision);
     const published = report.decision === "PUBLISH";
 
-    // With Mux Direct Upload the client already PUT the file to Mux before the
-    // pipeline ran, so there is nothing to ingest here.  The Mux webhook will
-    // fire video.asset.ready and set muxAssetId + muxPlaybackId once ready.
-    // For non-Mux providers (mock, future S3) the old submitToMux path could be
-    // restored, but for now it is intentionally skipped.
+    // Submit to Mux for transcoding/playback as soon as safety passes.
+    // This runs outside the transaction — failure is non-fatal (video stays
+    // published without a Mux playback ID; the local videoUrl still works).
+    let muxAssetId: string | null = null;
+    if (published) {
+      muxAssetId = await submitToMux(videoId).catch((err) => {
+        console.error("[pipeline] Mux ingest failed (non-fatal)", videoId, err);
+        return null;
+      });
+    }
+
     await prisma.$transaction([
       prisma.processingStatus.update({
         where: { videoId },
@@ -66,6 +73,7 @@ export async function processUpload(
           publishedAt: published ? new Date() : null,
           aiModel: report.ai.detectedModel ?? report.provenance.generator,
           provenanceVerified: published ? report.provenance.hasCredentials : false,
+          ...(muxAssetId ? { muxAssetId } : {}),
         },
       }),
     ]);

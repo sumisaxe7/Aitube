@@ -42,6 +42,7 @@ export function UploadClient({ creatorName }: { creatorName: string }) {
   const [title, setTitle] = useState("");
   const [genre, setGenre] = useState<string>(Genre.SCIFI);
   const [description, setDescription] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [simulate, setSimulate] = useState<string>("clean");
   const [progress, setProgress] = useState(0);
   const [videoId, setVideoId] = useState<string | null>(null);
@@ -70,6 +71,41 @@ export function UploadClient({ creatorName }: { creatorName: string }) {
 
   const canSubmit = Boolean(file && title.trim()) && phase === "form";
 
+  async function generateStartingFrame(file: File): Promise<string> {
+    return await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+      video.src = url;
+
+      video.onloadedmetadata = () => {
+        video.currentTime = 0.05;
+      };
+
+      video.onseeked = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("canvas unavailable"));
+          return;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/png"));
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("unable to read video thumbnail"));
+      };
+    });
+  }
+
   async function submit() {
     if (!canSubmit || !file) return;
     if (file.size > maxBytes) {
@@ -79,6 +115,22 @@ export function UploadClient({ creatorName }: { creatorName: string }) {
     setError(null);
     setPhase("uploading");
     setProgress(0);
+
+    let thumbnailDataUrl = "";
+    try {
+      thumbnailDataUrl = thumbnailFile
+        ? await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result ?? ""));
+            reader.onerror = () => reject(new Error("unable to read thumbnail"));
+            reader.readAsDataURL(thumbnailFile);
+          })
+        : await generateStartingFrame(file);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "thumbnail error");
+      setPhase("form");
+      return;
+    }
 
     // Read the video duration from the browser before uploading.
     const durationSec = await new Promise<number>((resolve) => {
@@ -101,10 +153,9 @@ export function UploadClient({ creatorName }: { creatorName: string }) {
     fd.append("genre", genre);
     fd.append("simulate", simulate);
     fd.append("durationSec", String(durationSec));
-    fd.append("fileSizeBytes", String(file.size));
-
-    let videoId_: string;
-    let muxUploadUrl: string | undefined;
+    fd.append("file", file);
+    if (thumbnailDataUrl) fd.append("thumbnailDataUrl", thumbnailDataUrl);
+    if (thumbnailFile) fd.append("thumbnailName", thumbnailFile.name);
 
     try {
       const metaRes = await fetch("/api/uploads", { method: "POST", body: fd });
@@ -159,6 +210,7 @@ export function UploadClient({ creatorName }: { creatorName: string }) {
     setFile(null);
     setTitle("");
     setDescription("");
+    setThumbnailFile(null);
     setSimulate("clean");
     setProgress(0);
     setVideoId(null);
@@ -208,6 +260,17 @@ export function UploadClient({ creatorName }: { creatorName: string }) {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t("upload.fields.descriptionPlaceholder")}
               />
+            </Field>
+            <Field label={t("upload.fields.thumbnail")}>
+              <input
+                type="file"
+                accept="image/*"
+                className={inputCls}
+                onChange={(e) => setThumbnailFile(e.target.files?.[0] ?? null)}
+              />
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {t("upload.fields.thumbnailHint")}
+              </span>
             </Field>
             <Field label={t("upload.simulate.label")}>
               <select

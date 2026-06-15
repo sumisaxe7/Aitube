@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { VideoPlayer } from "@/components/video-player";
+import MuxPlayer from "@mux/mux-player-react";
 
 import { prisma } from "@/lib/db";
 import { getCurrentCreator, getSessionUser } from "@/lib/session";
@@ -70,12 +70,38 @@ export default async function WatchPage({
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_320px]">
       <ViewBeacon videoId={video.id} durationSec={video.durationSec} />
       <div className="space-y-6">
-        <VideoPlayer
-          videoId={video.id}
-          initialPlaybackId={video.muxPlaybackId}
-          initialVideoUrl={video.videoUrl}
-          posterUrl={video.posterUrl}
-        />
+        {video.muxPlaybackId ? (
+          <MuxPlayer
+            playbackId={video.muxPlaybackId}
+            poster={video.posterUrl ?? undefined}
+            className="aspect-video w-full rounded-xl"
+            accentColor="#6366f1"
+          />
+        ) : video.videoUrl ? (
+          <video
+            src={video.videoUrl}
+            controls
+            poster={video.posterUrl ?? undefined}
+            className="aspect-video w-full rounded-xl bg-muted"
+          />
+        ) : (
+          <div
+            className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-muted"
+            style={
+              video.posterUrl
+                ? {
+                    backgroundImage: `url(${video.posterUrl})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : undefined
+            }
+          >
+            <span className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white">
+              ▶ {formatDuration(video.durationSec)}
+            </span>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">

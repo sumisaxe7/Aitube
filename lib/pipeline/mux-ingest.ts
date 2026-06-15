@@ -73,23 +73,9 @@ export async function submitToMux(videoId: string): Promise<string | null> {
 }
 
 // Called by the Mux webhook handler (POST /api/mux/webhook) when an asset is ready.
-// `videoId` is populated via Mux's passthrough field for Direct Upload flows.
-export async function handleMuxAssetReady(
-  assetId: string,
-  playbackId: string,
-  durationSec: number,
-  videoId?: string | null,
-) {
-  const posterUrl = `https://image.mux.com/${playbackId}/thumbnail.jpg`;
-  if (videoId) {
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { muxAssetId: assetId, muxPlaybackId: playbackId, durationSec, posterUrl },
-    });
-  } else {
-    await prisma.video.updateMany({
-      where: { muxAssetId: assetId },
-      data: { muxPlaybackId: playbackId, durationSec, posterUrl },
-    });
-  }
+export async function handleMuxAssetReady(assetId: string, playbackId: string, durationSec: number) {
+  await prisma.video.updateMany({
+    where: { muxAssetId: assetId },
+    data: { muxPlaybackId: playbackId, durationSec },
+  });
 }
