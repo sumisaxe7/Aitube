@@ -4,7 +4,7 @@ import { randInt, randomId } from "../_util";
 // Mux-shaped ids/urls so callers code against a realistic surface. Nothing is
 // actually uploaded or transcoded — getTranscodeStatus reports "ready" instantly.
 export const mockVideo: VideoService = {
-  async createUpload() {
+  async createUpload(_opts?: { passthrough?: string }) {
     const id = randomId();
     return {
       uploadId: `upl_${id}`,

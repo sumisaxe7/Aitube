@@ -42,6 +42,8 @@ export async function storeVideoInMongo(videoId: string, file: File) {
   };
 }
 
+<<<<<<< feature-update
+=======
 export async function streamVideoFromMongo(videoId: string) {
   const client = getClient();
   if (!client) return null;
@@ -58,6 +60,7 @@ export async function streamVideoFromMongo(videoId: string) {
   };
 }
 
+>>>>>>> main
 export async function deleteVideoFromMongo(videoId: string) {
   const client = getClient();
   if (!client) return false;

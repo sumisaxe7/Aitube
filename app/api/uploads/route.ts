@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
-
 import { NextResponse } from "next/server";
 import { Genre } from "@prisma/client";
 
@@ -22,7 +19,10 @@ const SIMULATE_VALUES: SimulateScenario[] = [
   "not_ai",
 ];
 
-// POST /api/uploads — accept multipart/form-data, save file to disk, kick pipeline.
+// POST /api/uploads — create a video record and return a direct upload URL.
+// When VIDEO_PROVIDER=mux the client PUTs the file straight to Mux; the server
+// never buffers the video bytes.  When VIDEO_PROVIDER=mock the client skips the
+// PUT step entirely (no real file is needed for mock pipeline execution).
 export async function POST(request: Request) {
   const creator = await getCurrentCreator();
   if (!creator) {
@@ -118,7 +118,13 @@ export async function POST(request: Request) {
   // Fire-and-forget: pipeline advances steps while the client polls.
   void processUpload(newVideo.id, simulate);
 
-  return NextResponse.json({ videoId: newVideo.id }, { status: 201 });
+  return NextResponse.json(
+    {
+      videoId: newVideo.id,
+      ...(isMux ? { muxUploadUrl: upload.uploadUrl } : {}),
+    },
+    { status: 201 },
+  );
 }
 
 // GET /api/uploads — the signed-in creator's uploads with their statuses.
