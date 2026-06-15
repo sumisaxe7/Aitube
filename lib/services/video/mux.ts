@@ -15,7 +15,7 @@ export const muxVideo: VideoService = {
   async createUpload(opts?: { passthrough?: string }) {
     const mux = client();
     const upload = await mux.video.uploads.create({
-      cors_origin: process.env.NEXTAUTH_URL ?? "*",
+      cors_origin: "*",
       new_asset_settings: {
         playback_policy: ["public"],
         video_quality: "basic",

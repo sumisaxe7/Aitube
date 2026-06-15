@@ -131,6 +131,7 @@ export function UploadClient({ creatorName }: { creatorName: string }) {
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open("PUT", muxUploadUrl!);
+          xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) setProgress((e.loaded / e.total) * 100);
           };
